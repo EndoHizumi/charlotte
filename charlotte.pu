@@ -1,0 +1,39 @@
+@startuml charlotte
+actor User
+participant fileWatcher as watcher
+participant deployDriver
+
+User -> watcher:監視対象ディレクトリ,対象ファイルパターン
+Loop
+    alt "ファイルが変更された"
+        activate deployDriver
+        watcher -> deployDriver:Event.type,Event.name
+        NOTE left :Tokenは、ファイル名をアンダースコア("_")で区切った最後の文字列のこと\n例：APL_HOGE_DEV\n[0]APL\n[1]HOGE\n[2]DEV←これがTokenになる
+        alt Event.type = "create" or "changed"
+            alt Token = "LOCAL" or "DEV" or "VERIFY"
+                alt exist "beforeTask.ps1"か"beforeTask_{Token}.ps1" in 監視対象ディレクトリ
+                    create beforeTask
+                        deployDriver -> beforeTask:実行
+                        deployDriver <-- beforeTask:終了値
+                    destroy beforeTask
+                end
+                    create deployBat
+                    deployDriver -> deployBat:ブローカーファイルパス・対象実行グループ・デプロイ対象リスト・通知先メールアドレス
+                    deployDriver <-- deployBat:終了値
+                    destroy deployBat
+                    alt 終了値 < 1
+                        deployDriver -> User:エラーメッセージ(デプロイ失敗)
+                    end
+                alt exist "afterTask.ps1"か"afterTask_{Token}.ps1" in 監視対象ディレクトリ
+                    create afterTask
+                        deployDriver -> afterTask:実行
+                        deployDriver <-- afterTask:終了値
+                    destroy afterTask
+                end
+            else
+                deployDriver -> User:エラーメッセージ（不正なトークン）
+            end
+        end
+    end
+end
+@enduml
