@@ -1,32 +1,33 @@
 param($path = "", $workspace = "")
 Add-Type -AssemblyName "System.IO"
 
-#.projectãƒ•ã‚¡ã‚¤ãƒ«ã‚’èª­ã¿è¾¼ã¿ã¾ã™ã€‚
+#.projectƒtƒ@ƒCƒ‹‚ğ“Ç‚İ‚İ‚Ü‚·B
 function loadEclipcePrj ($dirPath) {
-    #ãƒ¯ãƒ¼ã‚¯ã‚¹ãƒšãƒ¼ã‚¹ã‹ãƒ«ãƒ¼ãƒˆãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªã¾ã§æ¥ãŸã‚‰ã€æ¢ç´¢æ‰“ã¡åˆ‡ã‚Š
+    #ƒ[ƒNƒXƒy[ƒX‚©ƒ‹[ƒgƒfƒBƒŒƒNƒgƒŠ‚Ü‚Å—ˆ‚½‚çA’Tõ‘Å‚¿Ø‚è
     if ($dirPath -eq $workspace -or $dirPath.Length -eq 0) {
-        throw ".project not exist"
+        write-error ".project not exist"
+        return
     }
     Write-Debug $dirPath
     if ( [System.IO.File]::Exists($dirPath + "/.project")) {
-        #projectãƒ•ã‚¡ã‚¤ãƒ«ã‹ã‚‰å¿…è¦ãªæƒ…å ±ã‚’å–å¾—ã™ã‚‹ã€‚
+        #projectƒtƒ@ƒCƒ‹‚©‚ç•K—v‚Èî•ñ‚ğæ“¾‚·‚éB
         $project = [xml](gc -raw -Encoding Default $dirPath"/.project")
         $name = $project.projectDescription.name
         $library = $project.projectDescription.projects.project
-        New-Object PSObject -Property @{name = ${name}; library = ${library}; workspace = $dirPath}
+        New-Object PSObject -Property @{name = ${name}; library = ${library}; projectDir = $dirPath}
     }
     else {
-        #.projectãƒ•ã‚¡ã‚¤ãƒ«ãŒç„¡ã„å ´åˆã€å†å¸°çš„ã«å‘¼ã³å‡ºã™ã€‚ 
+        #.projectƒtƒ@ƒCƒ‹‚ª–³‚¢ê‡AÄ‹A“I‚ÉŒÄ‚Ño‚·B 
         loadEclipcePrj ([System.IO.Path]::GetDirectoryName($dirPath))
     }
 }
 
 
 if ($path.Length -eq 0) {
-    Throw "No specified Target path."
+    $path = (Get-Location).Path
 }
-Write-Output "Chalotte 0.1`r`n"
-#å…¥åŠ›ãƒ‘ã‚¹ãŒãƒ•ã‚¡ã‚¤ãƒ«ã®å ´åˆã€ãã®ãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªã‚’å–å¾—ã™ã‚‹
+Write-Output "Chalotte 0.2`r`n"
+#“ü—ÍƒpƒX‚ªƒtƒ@ƒCƒ‹‚Ìê‡A‚»‚ÌƒfƒBƒŒƒNƒgƒŠ‚ğæ“¾‚·‚é
 $FileAttribute = [System.IO.File]::GetAttributes($path)
 $directoryAttribute = [System.IO.FileAttributes]
 if ($FileAttribute -match $directoryAttribute) {
@@ -36,24 +37,36 @@ try {
     $result = loadEclipcePrj $path
     $name = $result.name
     $library = $result.library
-    $workSpace = $result.workspace
-    $buildTaskPath = "${workspace}\buildTask.ps1"
+    $projectDir = $result.projectDir
+    $buildTaskPath = "${projectDir}\buildTask.ps1"
+    $exitCode = 0
     if ([System.IO.File]::Exists( $buildTaskPath)) {
         Write-Output ":start ${buildTaskPath}"
-        $time = Measure-Command{
-            .${buildTaskPath}
+
+        $time = Measure-Command {
+            try {
+                .$buildTaskPath | Out-Default
+            }
+            catch {
+                write-error $Error[0].Exception
+                $script:exitCode = 1 
+            }
         }
-        Write-Output "`r`n"
-        if ($?){
-            Write-Output "BUILD TASK SUCCESSFUL`r`n"
-        }else{
-            throw "BUILD TASK FAILURE`r`n"
-        }
-        Write-Output "Total Time$($time.TotalSeconds) secs"
+        Write-Output "`r`n"       
+    }else{
+        Write-Error "buildTask not exist."
     }
 }
 catch {
-    Write-Error $_
-    Write-Output "BUILD TASK FAILURE`r`n" 
-    return -1   
+    Write-Error "charlotte inner Error:" $_.Exception
+    $exitCode = 1 
+}
+finally {
+    if ($exitCode -eq 0) {
+        Write-Output "BUILD TASK SUCCESSFUL"
+    }
+    else {
+        Write-Output "BUILD TASK FAILURE"
+    }
+    Write-Output "Total Time $($time.TotalSeconds) secs"
 }
